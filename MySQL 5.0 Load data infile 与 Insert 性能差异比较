@@ -1,0 +1,72 @@
+From:http://www.itpub.net/thread-510339-1-1.html
+
+测试目的:
+1.load data infile 做批量数据入库时的性能时间.
+2.insert与load data infile的性能差距.
+3.测试分段执行的load data infile效率与一次性执行load的性能差异.
+
+测试环境:
+操作系统:
+su-2.05$ uname -v
+FreeBSD 5.4-RELEASE-p4 #0: Fri Jul  8 07:03:13 UTC 2005
+mysql:
+Server version          5.0.12-beta-log
+Protocol version        10
+Connection              Localhost via UNIX socket
+UNIX socket             /tmp/mysql.sock
+Uptime:                 26 days 16 hours 31 min 14 sec
+执行测试前负载:
+load averages: 0.00, 0.00, 0.00
+
+测试日期:
+2006-3-23 10:09
+方法:
+1.导出一个文本文件:
+-rw-r--r--    1 gateway  www           97M Mar 23 10:03 MID_MOBILE_0011.sql
+su-2.05$ wc -l MID_MOBILE_0011.sql
+3777950 MID_MOBILE_0011.sql
+2.在mysql5.0服务器上创建表,结构为:
+[PHP]
+mysql> desc MID_MOBILE_test1;
++--------+-------------+------+-----+---------+-------+
+| Field  | Type        | Null | Key | Default | Extra |
++--------+-------------+------+-----+---------+-------+
+| mid    | varchar(14) | NO   | PRI |         |       |
+| mobile | bigint(11)  | YES  |     | NULL    |       |
++--------+-------------+------+-----+---------+-------+
+2 rows in set (0.02 sec)
+[/PHP]
+3.利用load data infile 语句进行数据导入测试.
+为了便于记录测试时间,我们利用Perl编写脚本来完成.
+
+测试结果:
+方法一:一次性load50万,100万,200万的数据.
+[PHP]
+目标文件条数        load方式        insert方式        比值
+50万                        11秒                        67秒                6倍
+100万                        42                        142                        3.4倍
+200万                        330                        589                        1.78 倍       
+
+-
+
+[/PHP]
+随着数据量的成倍增加,load的性能与insert方式的性能越来越接近了,不过仍然要好于insert方式.
+
+方法二:将50万,100万,200万的数据等分成100个文件,然后针对于每个文件单独进行load.
+[PHP]
+目标文件条数        一次性load方式        分批load方式        一次性insert方式        分批insert
+50万                        11秒                                12秒                                67                                        66
+100万                        42                                31                                142                                        141
+200万                        330                                176                                589                                        582       
+
+-
+
+[/PHP]
+采用分文件的方式可以有效提高load方式的执行效率,但是对insert方法却没有什么提高.
+
+究其根源主要是MySQL内部对于load 和 insert的处理机制不同.
+Load的处理机制是:在执行load之前,会关掉索引,当load全部执行完成后,再重新创建索引.
+Insert的处理机制是:每插入一条则更新一次数据库,更新一次索引.
+补充:另外,load与insert的不同还体现在load省去了sql语句解析,sql引擎处理,而是直接生成文件数据块,所以会比Insert快很多.
+
+以上是根据我个人理解做的一些总结,希望对大家能有所帮助,也希望大家进行批评指正,谢谢.
